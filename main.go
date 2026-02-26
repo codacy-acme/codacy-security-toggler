@@ -82,6 +82,14 @@ func main() {
 		}
 	}
 
+	// Phase 2: repositories not covered by any coding standard.
+	fmt.Println("--- Detached repositories (not following any coding standard) ---")
+	fmt.Println()
+	if err := processDetachedRepositories(client, *provider, *orgName, *enable, *dryRun, *verbose); err != nil {
+		log.Printf("error processing detached repositories: %v", err)
+		hadError = true
+	}
+
 	if hadError {
 		os.Exit(1)
 	}
@@ -190,6 +198,82 @@ func processStandard(
 	}
 
 	fmt.Println()
+	return nil
+}
+
+// processDetachedRepositories handles repositories that are not covered by any
+// coding standard by toggling their Security-category patterns directly.
+func processDetachedRepositories(client *codacy.Client, provider, orgName string, enable, dryRun, verbose bool) error {
+	repos, err := client.ListRepositoriesWithAnalysis(provider, orgName)
+	if err != nil {
+		return fmt.Errorf("listing repositories: %w", err)
+	}
+
+	var detached []codacy.RepositoryWithAnalysis
+	for _, r := range repos {
+		if len(r.Repository.Standards) == 0 {
+			detached = append(detached, r)
+		}
+	}
+
+	if len(detached) == 0 {
+		fmt.Println("No detached repositories found.")
+		fmt.Println()
+		return nil
+	}
+
+	fmt.Printf("Found %d detached repository(ies):\n", len(detached))
+	for _, r := range detached {
+		fmt.Printf("  - %s\n", r.Repository.Name)
+	}
+	fmt.Println()
+
+	action := "Enabling"
+	if !enable {
+		action = "Disabling"
+	}
+
+	var hadError bool
+	for _, r := range detached {
+		repoName := r.Repository.Name
+		fmt.Printf("==> %s\n", repoName)
+
+		tools, err := client.ListRepositoryTools(provider, orgName, repoName)
+		if err != nil {
+			log.Printf("    error listing tools for %s: %v", repoName, err)
+			hadError = true
+			continue
+		}
+		fmt.Printf("    Tools found: %d\n", len(tools))
+
+		var failedTools []string
+		for _, tool := range tools {
+			if verbose {
+				fmt.Printf("    %s security patterns for tool %s (%s)\n", action, tool.Name, tool.UUID)
+			}
+			if !dryRun {
+				if err := client.UpdateRepositorySecurityPatterns(provider, orgName, repoName, tool.UUID, enable); err != nil {
+					log.Printf("    warning: could not update tool %s: %v", tool.UUID, err)
+					failedTools = append(failedTools, tool.UUID)
+					continue
+				}
+			} else {
+				fmt.Printf("    [dry-run] would %s security patterns for tool %s (%s)\n",
+					strings.ToLower(action), tool.Name, tool.UUID)
+			}
+		}
+
+		updated := len(tools) - len(failedTools)
+		fmt.Printf("    %s security patterns: %d/%d tool(s) updated\n", action, updated, len(tools))
+		if len(failedTools) > 0 {
+			fmt.Printf("    Failed tools: %s\n", strings.Join(failedTools, ", "))
+		}
+		fmt.Println()
+	}
+
+	if hadError {
+		return fmt.Errorf("one or more detached repositories could not be fully updated")
+	}
 	return nil
 }
 

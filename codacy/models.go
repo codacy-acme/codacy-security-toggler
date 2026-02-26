@@ -39,6 +39,56 @@ type CodingStandardToolsListResponse struct {
 	Data []CodingStandardTool `json:"data"`
 }
 
+// CodingStandardInfo is a lightweight reference to a coding standard,
+// used as an element of Repository.Standards and AnalysisToolSettings.EnabledBy.
+type CodingStandardInfo struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// Repository holds the identity and associated coding standards for a repository.
+type Repository struct {
+	Name      string               `json:"name"`
+	Standards []CodingStandardInfo `json:"standards"`
+}
+
+// RepositoryWithAnalysis is one item from listOrganizationRepositoriesWithAnalysis.
+type RepositoryWithAnalysis struct {
+	Repository Repository `json:"repository"`
+}
+
+// PaginationInfo holds cursor-based pagination metadata.
+type PaginationInfo struct {
+	Cursor string `json:"cursor"`
+	Limit  int    `json:"limit"`
+	Total  int    `json:"total"`
+}
+
+// RepositoryWithAnalysisListResponse wraps the paginated list of repositories.
+type RepositoryWithAnalysisListResponse struct {
+	Data       []RepositoryWithAnalysis `json:"data"`
+	Pagination *PaginationInfo          `json:"pagination,omitempty"`
+}
+
+// AnalysisToolSettings holds per-tool configuration in a repository context.
+type AnalysisToolSettings struct {
+	IsEnabled       bool                 `json:"isEnabled"`
+	FollowsStandard bool                 `json:"followsStandard"`
+	EnabledBy       []CodingStandardInfo `json:"enabledBy"`
+}
+
+// AnalysisTool is one tool entry from listRepositoryTools.
+type AnalysisTool struct {
+	UUID     string               `json:"uuid"`
+	Name     string               `json:"name"`
+	Settings AnalysisToolSettings `json:"settings"`
+}
+
+// AnalysisToolsListResponse wraps a list of AnalysisTool values.
+type AnalysisToolsListResponse struct {
+	Data []AnalysisTool `json:"data"`
+}
+
 // CreateCodingStandardBody is the request body for creating a new coding standard.
 type CreateCodingStandardBody struct {
 	Name      string   `json:"name"`
